@@ -2,6 +2,8 @@ package jsonpath
 
 import (
 	"fmt"
+
+	log "github.com/Sirupsen/logrus"
 	"github.com/mohae/utilitybelt/deepcopy"
 	//"golang.org/x/tools/go/types"
 	"go/token"
@@ -13,8 +15,12 @@ import (
 
 func JsonPathLookup(obj interface{}, jpath string) (interface{}, error) {
 	steps, err := tokenize(jpath)
-	fmt.Println("f: steps: ", steps, err)
-	fmt.Println(jpath, steps)
+	log.WithFields(log.Fields{
+		"steps":    steps,
+		"jsonpath": jpath,
+		"err":      err,
+	}).Debug("tokenize")
+
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +29,9 @@ func JsonPathLookup(obj interface{}, jpath string) (interface{}, error) {
 	}
 	steps = steps[1:]
 	xobj := deepcopy.Iface(obj)
-	fmt.Println("f: xobj", xobj)
+	log.WithFields(log.Fields{
+		"xobj": xobj,
+	}).Debug("deepcopy")
 	for _, s := range steps {
 		op, key, args, err := parse_token(s)
 		// "key", "idx"
@@ -34,17 +42,23 @@ func JsonPathLookup(obj interface{}, jpath string) (interface{}, error) {
 				return nil, err
 			}
 		case "idx":
-			fmt.Println("idx ----------------1")
+			log.WithFields(log.Fields{
+				"value": 1,
+			}).Debug("idx")
 			xobj, err = get_key(xobj, key)
 			if err != nil {
 				return nil, err
 			}
 
 			if len(args.([]int)) > 1 {
-				fmt.Println("idx ----------------2")
+				log.WithFields(log.Fields{
+					"value": 2,
+				}).Debug("idx")
 				res := []interface{}{}
 				for _, x := range args.([]int) {
-					fmt.Println("idx ---- ", x)
+					log.WithFields(log.Fields{
+						"value": x,
+					}).Debug("idx")
 					tmp, err := get_idx(xobj, x)
 					if err != nil {
 						return nil, err
@@ -53,13 +67,17 @@ func JsonPathLookup(obj interface{}, jpath string) (interface{}, error) {
 				}
 				xobj = res
 			} else if len(args.([]int)) == 1 {
-				fmt.Println("idx ----------------3")
+				log.WithFields(log.Fields{
+					"value": 3,
+				}).Debug("idx")
 				xobj, err = get_idx(xobj, args.([]int)[0])
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				fmt.Println("idx ----------------4")
+				log.WithFields(log.Fields{
+					"value": 4,
+				}).Debug("idx")
 				return nil, fmt.Errorf("cannot index on empty slice")
 			}
 		case "range":
@@ -90,14 +108,10 @@ func JsonPathLookup(obj interface{}, jpath string) (interface{}, error) {
 
 func tokenize(query string) ([]string, error) {
 	tokens := []string{}
-	//	token_start := false
-	//	token_end := false
 	token := ""
 
-	// fmt.Println("-------------------------------------------------- start")
 	for idx, x := range query {
 		token += string(x)
-		// fmt.Printf("idx: %d, x: %s, token: %s, tokens: %v\n", idx, string(x), token, tokens)
 		if idx == 0 {
 			if token == "$" || token == "@" {
 				tokens = append(tokens, token[:])
@@ -116,9 +130,7 @@ func tokenize(query string) ([]string, error) {
 			token = "."
 			continue
 		} else {
-			// fmt.Println("else: ", string(x), token)
 			if strings.Contains(token, "[") {
-				// fmt.Println(" contains [ ")
 				if x == ']' && !strings.HasSuffix(token, "\\]") {
 					if token[0] == '.' {
 						tokens = append(tokens, token[1:])
@@ -129,7 +141,6 @@ func tokenize(query string) ([]string, error) {
 					continue
 				}
 			} else {
-				// fmt.Println(" doesn't contains [ ")
 				if x == '.' {
 					if token[0] == '.' {
 						tokens = append(tokens, token[1:len(token)-1])
@@ -158,8 +169,6 @@ func tokenize(query string) ([]string, error) {
 			}
 		}
 	}
-	// fmt.Println("finished tokens: ", tokens)
-	// fmt.Println("================================================= done ")
 	return tokens, nil
 }
 
@@ -186,16 +195,17 @@ func parse_token(token string) (op string, key string, args interface{}, err err
 		}
 		tail = tail[1 : len(tail)-1]
 
-		fmt.Println(key, tail)
+		log.WithFields(log.Fields{
+			"key":  key,
+			"tail": key,
+		}).Debug("parsing token")
 		if strings.Contains(tail, "?") {
-			// filter -------------------------------------------------
 			op = "filter"
 			if strings.HasPrefix(tail, "?(") && strings.HasSuffix(tail, ")") {
 				args = strings.Trim(tail[2:len(tail)-1], " ")
 			}
 			return
 		} else if strings.Contains(tail, ":") {
-			// range ----------------------------------------------
 			op = "range"
 			tails := strings.Split(tail, ":")
 			if len(tails) != 2 {
@@ -217,7 +227,6 @@ func parse_token(token string) (op string, key string, args interface{}, err err
 			args = [2]interface{}{nil, nil}
 			return
 		} else {
-			// idx ------------------------------------------------
 			op = "idx"
 			res := []int{}
 			for _, x := range strings.Split(tail, ",") {
@@ -235,8 +244,11 @@ func parse_token(token string) (op string, key string, args interface{}, err err
 
 func filter_get_from_explicit_path(obj interface{}, path string) (interface{}, error) {
 	steps, err := tokenize(path)
-	fmt.Println("f: steps: ", steps, err)
-	fmt.Println(path, steps)
+	log.WithFields(log.Fields{
+		"steps": steps,
+		"path":  path,
+		"err":   err,
+	}).Debug("filter_get_from_explicit_path")
 	if err != nil {
 		return nil, err
 	}
@@ -245,10 +257,11 @@ func filter_get_from_explicit_path(obj interface{}, path string) (interface{}, e
 	}
 	steps = steps[1:]
 	xobj := obj
-	fmt.Println("f: xobj", xobj)
+	log.WithFields(log.Fields{
+		"xobj": xobj,
+	}).Debug("xobj")
 	for _, s := range steps {
 		op, key, args, err := parse_token(s)
-		// "key", "idx"
 		switch op {
 		case "key":
 			xobj, err = get_key(xobj, key)
@@ -284,7 +297,6 @@ func get_key(obj interface{}, key string) (interface{}, error) {
 		}
 		return nil, fmt.Errorf("key error: %s not found in object", key)
 	case reflect.Slice:
-		// slice we should get from all objects in it.
 		res := []interface{}{}
 		for i := 0; i < reflect.ValueOf(obj).Len(); i++ {
 			tmp, _ := get_idx(obj, i)
@@ -346,7 +358,10 @@ func get_range(obj, frm, to interface{}) (interface{}, error) {
 		if _to < 0 || _to > length {
 			return nil, fmt.Errorf("index [to] out of range: len: %v, to: %v", length, to)
 		}
-		fmt.Println("_frm, _to: ", _frm, _to)
+		log.WithFields(log.Fields{
+			"_frm": _frm,
+			"_to":  _to,
+		}).Debug("get_range")
 		res_v := reflect.ValueOf(obj).Slice(_frm, _to)
 		return res_v.Interface(), nil
 	default:
@@ -439,10 +454,15 @@ func parse_filter(filter string) (lp string, op string, rp string, err error) {
 
 func eval_filter(obj, root interface{}, lp, op, rp string) (res bool, err error) {
 	var lp_v interface{}
-	fmt.Println(obj, root)
-	fmt.Printf("lp: %v, op: %v, rp: %v\n", lp, op, rp)
+	log.WithFields(log.Fields{
+		"obj":  obj,
+		"root": root,
+		"lp":   lp,
+		"op":   op,
+		"rp":   rp,
+	}).Debug("eval_filter start")
 	if strings.HasPrefix(lp, "@.") {
-		fmt.Println("@. ----------------")
+		log.Debug("@. ----------------")
 		lp_v, err = filter_get_from_explicit_path(obj, lp)
 	} else if strings.HasPrefix(lp, "$.") {
 		lp_v, err = filter_get_from_explicit_path(root, lp)
@@ -463,7 +483,10 @@ func eval_filter(obj, root interface{}, lp, op, rp string) (res bool, err error)
 		} else {
 			rp_v = rp
 		}
-		fmt.Printf("lp_v: %v, rp_v: %v\n", lp_v, rp_v)
+		log.WithFields(log.Fields{
+			"lp_v": lp_v,
+			"rp_v": rp_v,
+		}).Debug("not exists nor =~ ??? what does this mean?")
 		return cmp_any(lp_v, rp_v, op)
 	}
 }
@@ -474,9 +497,12 @@ func cmp_any(obj1, obj2 interface{}, op string) (bool, error) {
 	default:
 		return false, fmt.Errorf("op should only be <, <=, ==, >= and >")
 	}
-	fmt.Println("cmp_any: ", obj1, obj2)
 	exp := fmt.Sprintf("%v %s %v", obj1, op, obj2)
-	fmt.Println("exp: ", exp)
+	log.WithFields(log.Fields{
+		"obj1": obj1,
+		"obj2": obj2,
+		"op":   op,
+	}).Debug("cmp_any")
 	fset := token.NewFileSet()
 	res, err := types.Eval(fset, nil, 0, exp)
 	if err != nil {
